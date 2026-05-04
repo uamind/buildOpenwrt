@@ -57,6 +57,16 @@ jobs:
         rm -rf feeds/packages/net/sing-box
         rm -rf feeds/luci/themes/luci-theme-argon  # 删除官方旧版 argon 避免版本冲突
 
+    - name: Configure & Permanent TUNA Mirror
+      run: |
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        cd openwrt
+
+
+        # 将 Argon 设为系统默认主题！
+        sed -i 's/luci-theme-bootstrap/luci-theme-argon/g' feeds/luci/collections/luci/Makefile
+
+        make defconfig
 
     - name: Build
       run: |
