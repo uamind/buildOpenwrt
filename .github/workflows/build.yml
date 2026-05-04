@@ -27,40 +27,27 @@ jobs:
       run: |
         git clone $REPO_URL openwrt
         cd openwrt
-        git checkout $REPO_TAG  # 切换到 v25.12.2
-        echo "src-git psw2 https://github.com/xiaorouji/openwrt-passwall.git;main" >> feeds.conf.default
+        git checkout $REPO_TAG
+        # 重点：不要再向 feeds.conf.default 里追加任何 psw2 的内容！保持官方源干净。
 
-    - name: Update & Install Feeds
+    - name: Update & Install Official Feeds
       run: |
         cd openwrt
-        # 1. 预创建目录，防止 find 脚本因目录不存在而崩溃
-        mkdir -p feeds/psw2
-
-        # 2. 确保 feeds.conf 包含正确的源 (去掉 ;main 尝试自动探测)
-        sed -i '/psw2/d' feeds.conf.default
-        echo "src-git psw2 https://github.com/xiaorouji/openwrt-passwall.git" >> feeds.conf.default
-
-        # 3. 更新 feeds 并清理旧索引缓存
+        # 只更新官方包，不掺杂第三方
         ./scripts/feeds update -a
-        rm -rf feeds/*.index
+        ./scripts/feeds install -a
 
-        # 4. 显式安装，如果报错则尝试单独安装关键包
-        if ! ./scripts/feeds install -a; then
-            echo "Standard install failed, attempting manual package install..."
-            ./scripts/feeds install luci-app-passwall
-            ./scripts/feeds install -a
-        fi
-
-        # 5. 调试信息：确认目录是否真的有东西
-        ls -la feeds/psw2
-
-    - name: Configure & Permanent TUNA Mirror
+    - name: Manually Add PassWall Source (Bypass Feeds)
       run: |
-        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
         cd openwrt
-        # 将默认源永久修改为清华源
-        sed -i 's/downloads.openwrt.org/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' package/base-files/files/etc/opkg/distfeeds.conf
-        make defconfig
+        # 1. 直接将 PassWall 的两个仓库克隆到 package 目录下 (深度为1，极速克隆)
+        git clone --depth 1 -b main https://github.com/xiaorouji/openwrt-passwall.git package/passwall
+        git clone --depth 1 -b main https://github.com/xiaorouji/openwrt-passwall-packages.git package/passwall-packages
+
+        # 2. 清除官方 feeds 中可能冲突的旧版本核心 (防止编译时发生版本冲突报错)
+        rm -rf feeds/packages/net/xray-core
+        rm -rf feeds/packages/net/sing-box
+
 
     - name: Build
       run: |
