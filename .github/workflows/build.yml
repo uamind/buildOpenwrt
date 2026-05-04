@@ -1,0 +1,56 @@
+name: Build OpenWrt v25.12.2 for M4 Mac
+
+on:
+  workflow_dispatch:
+
+env:
+  REPO_URL: https://github.com/openwrt/openwrt
+  REPO_TAG: v25.12.2  # 明确锁定目标版本
+  FEEDS_CONF: feeds.conf.default
+  CONFIG_FILE: .config
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Prepare Environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential clang flex bison g++ gawk \
+        gettext git libncurses5-dev libssl-dev python3-distutils rsync unzip zlib1g-dev
+
+    - name: Clone Source & Checkout Tag
+      run: |
+        git clone $REPO_URL openwrt
+        cd openwrt
+        git checkout $REPO_TAG  # 切换到 v25.12.2
+        echo "src-git psw2 https://github.com/xiaorouji/openwrt-passwall.git;main" >> feeds.conf.default
+
+    - name: Update Feeds
+      run: |
+        cd openwrt
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+
+    - name: Configure & Permanent TUNA Mirror
+      run: |
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/.config
+        cd openwrt
+        # 将默认源永久修改为清华源
+        sed -i 's/downloads.openwrt.org/mirrors.tuna.tsinghua.edu.cn\/openwrt/g' package/base-files/files/etc/opkg/distfeeds.conf
+        make defconfig
+
+    - name: Build
+      run: |
+        cd openwrt
+        make -j$(nproc) || make -j1 V=s
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: OpenWrt_v25.12.2_M4
+        path: openwrt/bin/targets/armvirt/generic/*.qcow2
