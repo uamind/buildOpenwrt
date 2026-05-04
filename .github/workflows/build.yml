@@ -30,11 +30,29 @@ jobs:
         git checkout $REPO_TAG  # 切换到 v25.12.2
         echo "src-git psw2 https://github.com/xiaorouji/openwrt-passwall.git;main" >> feeds.conf.default
 
-    - name: Update Feeds
+    - name: Update & Install Feeds
       run: |
         cd openwrt
+        # 1. 预创建目录，防止 find 脚本因目录不存在而崩溃
+        mkdir -p feeds/psw2
+
+        # 2. 确保 feeds.conf 包含正确的源 (去掉 ;main 尝试自动探测)
+        sed -i '/psw2/d' feeds.conf.default
+        echo "src-git psw2 https://github.com/xiaorouji/openwrt-passwall.git" >> feeds.conf.default
+
+        # 3. 更新 feeds 并清理旧索引缓存
         ./scripts/feeds update -a
-        ./scripts/feeds install -a
+        rm -rf feeds/*.index
+
+        # 4. 显式安装，如果报错则尝试单独安装关键包
+        if ! ./scripts/feeds install -a; then
+            echo "Standard install failed, attempting manual package install..."
+            ./scripts/feeds install luci-app-passwall
+            ./scripts/feeds install -a
+        fi
+
+        # 5. 调试信息：确认目录是否真的有东西
+        ls -la feeds/psw2
 
     - name: Configure & Permanent TUNA Mirror
       run: |
